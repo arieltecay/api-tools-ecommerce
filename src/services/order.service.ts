@@ -1,0 +1,206 @@
+import Order from '../models/order.model';
+import Product from '../models/product.model';
+import Customer from '../models/customer.model';
+import { IOrder, IProduct, ICustomer, ISettings } from '../models/types';
+import mongoose from 'mongoose';
+import { sendEmail, EmailVariables } from './email.service';
+import * as settingsService from './settings.service';
+
+const generateOrderNumber = (): string => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `ORD-${year}${month}${day}-${random}`;
+};
+
+export interface CreateOrderDTO {
+  customer: {
+    fullName: string;
+    email: string;
+    phone: string;
+    idNumber?: string;
+  };
+  shippingAddress: {
+    street: string;
+    city: string;
+    province: string;
+    postalCode: string;
+  };
+  items: {
+    product: {
+      _id: string;
+      uuid: string;
+      sku: string;
+      name: string;
+      primaryImageUrl: string;
+    };
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+  }[];
+  pricing: {
+    subtotal: number;
+    discountCode?: string;
+    discountAmount: number;
+    shippingCost: number;
+    total: number;
+  };
+  payment: {
+    method: 'card' | 'bank_transfer';
+  };
+  whatsappConsent: boolean;
+  source?: 'storefront' | 'manual';
+}
+
+export const createOrder = async (orderData: CreateOrderDTO): Promise<IOrder> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const settings: ISettings = await settingsService.getSettings();
+    const orderNumber = generateOrderNumber();
+    
+    const initialStatus = orderData.payment.method === 'bank_transfer' ? 'pending_payment' : 'confirmed';
+
+    const order = new Order({
+      ...orderData,
+      orderNumber,
+      status: initialStatus,
+      statusHistory: [{
+        status: initialStatus,
+        changedBy: 'system',
+        note: 'Order created'
+      }]
+    });
+
+    await order.save({ session });
+
+    // 1. Update Stock
+    for (const item of orderData.items) {
+      const product = await Product.findById(item.product._id).session(session);
+      if (!product) throw new Error(`Product ${item.product.name} not found`);
+      
+      if (product.stock < item.quantity) {
+        throw new Error(`Insufficient stock for ${product.name}`);
+      }
+
+      product.stock -= item.quantity;
+      product.salesCount += item.quantity;
+      if (product.stock === 0) product.status = 'out_of_stock';
+      
+      await product.save({ session });
+    }
+
+    // 2. Link or create Customer
+    let customer = await Customer.findOne({ email: orderData.customer.email }).session(session);
+    if (customer) {
+      customer.orders.push(order._id as mongoose.Types.ObjectId);
+      customer.ordersCount += 1;
+      customer.totalSpent += orderData.pricing.total;
+      customer.lastOrderAt = new Date();
+      await customer.save({ session });
+      
+      order.customer.customerId = customer._id as mongoose.Types.ObjectId;
+      await order.save({ session });
+    } else {
+      const newCustomer = new Customer({
+        fullName: orderData.customer.fullName,
+        email: orderData.customer.email,
+        phone: orderData.customer.phone,
+        origin: orderData.source === 'manual' ? 'manual' : 'online',
+        orders: [order._id],
+        ordersCount: 1,
+        totalSpent: orderData.pricing.total,
+        lastOrderAt: new Date()
+      });
+      await newCustomer.save({ session });
+      
+      order.customer.customerId = newCustomer._id as mongoose.Types.ObjectId;
+      await order.save({ session });
+    }
+
+    await session.commitTransaction();
+
+    // Trigger email notification
+    try {
+      if (order.payment.method === 'bank_transfer') {
+        const emailVars: EmailVariables = {
+          buyerName: order.customer.fullName,
+          orderNumber: order.orderNumber,
+          orderTotal: order.pricing.total.toLocaleString(),
+          holderName: settings.payment.bankTransfer.holderName,
+          bank: settings.payment.bankTransfer.bank,
+          cbu: settings.payment.bankTransfer.cbu,
+          alias: settings.payment.bankTransfer.alias,
+          taxId: settings.payment.bankTransfer.taxId,
+          additionalInstructions: settings.payment.bankTransfer.additionalInstructions || '',
+          storeName: settings.store.name
+        };
+        await sendEmail(
+          order.customer.email,
+          `Tu pedido #${order.orderNumber} está confirmado — instrucciones de pago`,
+          'bank-transfer-instructions',
+          emailVars
+        );
+      } else if (order.payment.method === 'card' && order.status === 'confirmed') {
+        const emailVars: EmailVariables = {
+          buyerName: order.customer.fullName,
+          orderNumber: order.orderNumber,
+          orderTotal: order.pricing.total.toLocaleString(),
+          storeName: settings.store.name
+        };
+        await sendEmail(
+          order.customer.email,
+          `¡Gracias por tu compra! Pedido #${order.orderNumber}`,
+          'order-confirmation-card',
+          emailVars
+        );
+      }
+    } catch (emailError) {
+      console.error('Failed to send order confirmation email:', emailError);
+    }
+
+    return order;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+export const getAllOrders = async (filters: { status?: string; email?: string } = {}, options: { page?: number; limit?: number } = {}): Promise<{ orders: IOrder[], total: number }> => {
+  const { page = 1, limit = 20 } = options;
+  const query: any = {}; // Mongoose query can stay somewhat dynamic but we could use FilterQuery<IOrder>
+  if (filters.status) query.status = filters.status;
+  if (filters.email) query['customer.email'] = filters.email;
+
+  const orders = await Order.find(query)
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  const total = await Order.countDocuments(query);
+  return { orders, total };
+};
+
+export const getOrderById = async (id: string): Promise<IOrder | null> => {
+  return await Order.findById(id);
+};
+
+export const updateOrderStatus = async (id: string, status: string, changedBy: string, note?: string): Promise<IOrder | null> => {
+  const order = await Order.findById(id);
+  if (!order) return null;
+
+  order.status = status as any;
+  order.statusHistory.push({
+    status,
+    changedBy,
+    changedAt: new Date(),
+    note
+  });
+
+  return await order.save();
+};
