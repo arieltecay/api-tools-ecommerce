@@ -1,5 +1,6 @@
 # Tools Store API
 
+Ariel Tecay
 Backend robusto construido con Node.js, Express y MongoDB, totalmente tipado en TypeScript. Maneja la lógica de negocio, autenticación, gestión de inventario, procesamiento de pagos y notificaciones.
 
 ## 🚀 Tecnologías
