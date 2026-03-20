@@ -21,7 +21,10 @@ interface PaginationOptions {
 export const getAllProducts = async (filters: ProductFilters = {}, options: PaginationOptions = {}): Promise<{ products: IProduct[], total: number }> => {
   const { page = 1, limit = 20, sort = 'newest' } = options;
   
-  const query: any = { status: filters.status || 'active' };
+  const query: any = {};
+  if (filters.status) {
+    query.status = filters.status;
+  }
 
   if (filters.category) query['category.slug'] = filters.category;
   
