@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import * as discountCodeController from '../controllers/discount-code.controller';
+import { authenticateAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/', discountCodeController.getAll);
+router.get('/', authenticateAdmin, discountCodeController.getAll);
 router.post('/validate', discountCodeController.validate);
-router.post('/', discountCodeController.create);
+router.post('/', authenticateAdmin, discountCodeController.create);
 
 export default router;
