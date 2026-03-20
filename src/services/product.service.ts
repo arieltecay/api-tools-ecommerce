@@ -52,10 +52,17 @@ export const getAllProducts = async (filters: ProductFilters = {}, options: Pagi
   }
 
   // Sorting logic
-  let sortObj: any = { createdAt: -1 };
+  let sortObj: any = {};
   if (sort === 'price_asc') sortObj = { price: 1 };
   else if (sort === 'price_desc') sortObj = { price: -1 };
+  else if (sort === 'stock_asc') sortObj = { stock: 1 };
+  else if (sort === 'stock_desc') sortObj = { stock: -1 };
+  else if (sort === 'status_asc') sortObj = { status: 1 };
+  else if (sort === 'status_desc') sortObj = { status: -1 };
+  else if (sort === 'category_asc') sortObj = { 'category.name': 1 };
+  else if (sort === 'category_desc') sortObj = { 'category.name': -1 };
   else if (sort === 'oldest') sortObj = { createdAt: 1 };
+  else sortObj = { createdAt: -1 }; // newest default
 
   const products = await Product.find(query)
     .sort(sortObj)
