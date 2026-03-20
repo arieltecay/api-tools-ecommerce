@@ -18,22 +18,22 @@ export const loginUser = async (email: string, password: string): Promise<{ acce
   return { ...tokens, user };
 };
 
-export const registerUser = async (userData: Partial<IAdminUser>): Promise<IAdminUser> => {
-  const { name, email, passwordHash, role } = userData;
-  // In a real scenario, passwordHash passed here would be the plain password needing hashing
-  // But let's assume controller handles hashing or we do it here. 
-  // Better pattern: Service handles hashing.
-  
-  // Actually, let's fix the type. userData should have password, not passwordHash for register input.
-  // But for now, sticking to the model interface to keep it simple, but we'll hash it.
-  
-  const hashedPassword = await bcrypt.hash(userData.passwordHash!, 12);
+export const registerUser = async (userData: any): Promise<IAdminUser> => {
+  const { name, email, password, role } = userData;
+
+  if (!password) {
+    throw new Error('Password is required for registration');
+  }
+
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(password, saltRounds);
   
   const user = new AdminUser({
     name,
     email,
     passwordHash: hashedPassword,
-    role: role || 'operator'
+    role: role || 'admin', // Por defecto admin para facilitar tu primera cuenta
+    isActive: true
   });
 
   return await user.save();

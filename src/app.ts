@@ -1,9 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { connectDB } from './config/db';
-import dotenv from 'dotenv';
 
 // Import Routes
 import authRoutes from './routes/auth.routes';
@@ -21,11 +23,30 @@ import reportRoutes from './routes/report.routes';
 import paymentRoutes from './routes/payment.routes';
 import importRoutes from './routes/import.routes';
 
-dotenv.config();
-
 const app: Express = express();
 
-// Middleware to ensure DB connection
+// Configurar CORS
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',') 
+  : ['http://localhost:5173', 'http://localhost:5174'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permitir peticiones sin origen (como apps móviles o curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS Policy: Origin not allowed'), false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
+
+// Middleware de conexión a DB (Serverless friendly)
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
     await connectDB();
@@ -35,12 +56,10 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Other Middlewares
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, // Allow all if not defined for now
-  credentials: true
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -63,7 +82,7 @@ app.use('/api/v1/import', importRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date() });
+  res.status(200).json({ status: 'ok', timestamp: new Date(), env: process.env.NODE_ENV });
 });
 
 export default app;
