@@ -1,4 +1,4 @@
-import express, { Express } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -25,18 +25,25 @@ dotenv.config();
 
 const app: Express = express();
 
-// Middleware
+// Middleware to ensure DB connection
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    res.status(500).json({ message: 'Database connection error' });
+  }
+});
+
+// Other Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://localhost:5174'],
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, // Allow all if not defined for now
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-// Database
-connectDB();
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
