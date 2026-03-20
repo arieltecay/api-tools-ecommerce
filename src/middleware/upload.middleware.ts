@@ -19,3 +19,19 @@ export const upload = multer({
     cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, webp)'));
   },
 });
+
+export const uploadExcel = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit para excels grandes
+  },
+  fileFilter: (_req, file, cb) => {
+    const filetypes = /xlsx|csv|xls|vnd.openxmlformats-officedocument.spreadsheetml.sheet/;
+    const isExcel = filetypes.test(file.mimetype) || filetypes.test(path.extname(file.originalname).toLowerCase());
+
+    if (isExcel) {
+      return cb(null, true);
+    }
+    cb(new Error('Formato de archivo no válido. Solo se permiten .xlsx o .csv'));
+  },
+});

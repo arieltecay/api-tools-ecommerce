@@ -28,14 +28,14 @@ interface ProductImportRow {
 export const processProductImport = async (fileBuffer: Buffer, fileType: string): Promise<ImportResult> => {
   let rows: ProductImportRow[] = [];
 
-  if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+  // 1. EXTRAER DATOS (EXCEL O CSV)
+  if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || fileType === 'application/vnd.ms-excel') {
     const workbook = new ExcelJS.Workbook();
-    // Use Buffer.from to ensure compatibility with ExcelJS load method
     const buffer = Buffer.from(fileBuffer);
-    await workbook.xlsx.load(buffer as any); // exceljs types can be tricky with Node versions
+    await workbook.xlsx.load(buffer as any);
     const worksheet = workbook.getWorksheet(1);
     
-    if (!worksheet) throw new Error('No worksheet found');
+    if (!worksheet) throw new Error('No se encontró la hoja de cálculo');
 
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // Skip header
@@ -56,10 +56,7 @@ export const processProductImport = async (fileBuffer: Buffer, fileType: string)
     });
   } else {
     const content = fileBuffer.toString();
-    const records = parse(content, {
-      columns: true,
-      skip_empty_lines: true
-    });
+    const records = parse(content, { columns: true, skip_empty_lines: true });
     rows = records.map((r: Record<string, string>) => ({
       sku: r.sku,
       name: r.name,
@@ -77,22 +74,37 @@ export const processProductImport = async (fileBuffer: Buffer, fileType: string)
 
   const result: ImportResult = { successCount: 0, errorCount: 0, errors: [] };
 
-  const allCategories: ICategory[] = await Category.find({ isActive: true });
-  const allBrands: IBrand[] = await Brand.find({ isActive: true });
-
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
       if (!row.sku || !row.name || !row.categoryName || !row.brandName) {
-        throw new Error('Campos obligatorios faltantes (SKU, Nombre, Categoría o Marca)');
+        throw new Error('Faltan campos obligatorios: SKU, Nombre, Categoría o Marca');
       }
 
-      const category = allCategories.find(c => c.name.toLowerCase() === row.categoryName.toLowerCase());
-      if (!category) throw new Error(`Categoría "${row.categoryName}" no encontrada`);
+      // 2. AUTO-CREAR CATEGORÍA SI NO EXISTE
+      let category = await Category.findOne({ name: { $regex: new RegExp(`^${row.categoryName}$`, 'i') } });
+      if (!category) {
+        category = await Category.create({
+          name: row.categoryName,
+          slug: row.categoryName.toLowerCase().replace(/ /g, '-'),
+          isActive: true
+        });
+        console.log(`🌱 Categoría auto-creada: ${row.categoryName}`);
+      }
 
-      const brand = allBrands.find(b => b.name.toLowerCase() === row.brandName.toLowerCase());
-      if (!brand) throw new Error(`Marca "${row.brandName}" no encontrada`);
+      // 3. AUTO-CREAR MARCA SI NO EXISTE
+      let brand = await Brand.findOne({ name: { $regex: new RegExp(`^${row.brandName}$`, 'i') } });
+      if (!brand) {
+        brand = await Brand.create({
+          name: row.brandName,
+          description: `Marca creada automáticamente por importación`,
+          isActive: true
+        });
+        console.log(`🌱 Marca auto-creada: ${row.brandName}`);
+      }
 
+      // 4. PREPARAR DATOS DEL PRODUCTO (Imágenes vacías por defecto)
+      const existingProduct = await Product.findOne({ sku: row.sku });
       const productData = {
         name: row.name,
         slug: row.slug,
@@ -111,7 +123,8 @@ export const processProductImport = async (fileBuffer: Buffer, fileType: string)
         stock: row.stock,
         minStock: row.minStock,
         shortDescription: row.shortDescription,
-        status: row.status
+        status: row.status,
+        images: existingProduct ? existingProduct.images : []
       };
 
       await Product.updateOne(

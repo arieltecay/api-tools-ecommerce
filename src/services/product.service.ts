@@ -17,24 +17,22 @@ interface PaginationOptions {
   limit?: number;
   sort?: string; // e.g., 'price_asc', 'price_desc', 'newest'
 }
-
-export const getAllProducts = async (filters: ProductFilters = {}, options: PaginationOptions = {}): Promise<{ products: IProduct[], total: number }> => {
+export const getAllProducts = async (filters: ProductFilters = {}, options: PaginationOptions = {}): Promise<{ products: IProduct[], total: number, page: number, totalPages: number }> => {
   const { page = 1, limit = 20, sort = 'newest' } = options;
-  
   const query: any = {};
   if (filters.status) {
     query.status = filters.status;
   }
 
   if (filters.category) query['category.slug'] = filters.category;
-  
+
   if (filters.brand) {
     const brands = filters.brand.split(',');
     query['brand.name'] = brands.length > 1 ? { $in: brands } : brands[0];
   }
 
   if (filters.featured) query.isFeatured = filters.featured === 'true';
-  
+
   if (filters.q) {
     query.$or = [
       { name: new RegExp(filters.q, 'i') },
@@ -65,9 +63,16 @@ export const getAllProducts = async (filters: ProductFilters = {}, options: Pagi
     .limit(limit);
 
   const total = await Product.countDocuments(query);
+  const totalPages = Math.ceil(total / limit);
 
-  return { products, total };
+  return { 
+    products, 
+    total, 
+    page, 
+    totalPages 
+  };
 };
+
 
 export const getProductByUuid = async (uuid: string): Promise<IProduct | null> => {
   return await Product.findOne({ uuid });
