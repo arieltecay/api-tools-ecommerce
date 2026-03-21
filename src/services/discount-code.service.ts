@@ -48,8 +48,20 @@ export const validateDiscountCode = async (code: string, email: string, orderAmo
   };
 };
 
-export const createDiscountCode = async (data: Partial<IDiscountCode>, userId: string): Promise<IDiscountCode> => {
-  const discountCode = new DiscountCode({ ...data, createdBy: new mongoose.Types.ObjectId(userId) });
+export const createDiscountCode = async (data: any, userId: string): Promise<IDiscountCode> => {
+  const creationData: any = { ...data };
+
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    creationData.createdBy = new mongoose.Types.ObjectId(userId);
+  }
+
+  if (Array.isArray(data.applicableCategories)) {
+    creationData.applicableCategories = data.applicableCategories
+      .filter((id: string) => mongoose.Types.ObjectId.isValid(id))
+      .map((id: string) => new mongoose.Types.ObjectId(id));
+  }
+
+  const discountCode = new DiscountCode(creationData);
   return await discountCode.save();
 };
 
