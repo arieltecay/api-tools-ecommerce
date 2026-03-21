@@ -43,13 +43,21 @@ export const getById = async (req: Request, res: Response) => {
 
 export const updateStatus = async (req: RequestWithUser, res: Response) => {
   try {
-    const { status, note } = req.body;
-    const changedBy = req.user?._id || 'system';
-    const order = await orderService.updateOrderStatus(req.params.id, status, changedBy, note);
-    if (!order) return res.status(404).json({ message: 'Order not found' });
+    const { status, paymentStatus, paymentMethod, note } = req.body;
+    const changedBy = req.user?._id?.toString() || 'system';
+    
+    const order = await orderService.updateOrderStatus(req.params.id, {
+      status,
+      paymentStatus,
+      paymentMethod,
+      changedBy,
+      note
+    });
+
+    if (!order) return res.status(404).json({ message: 'Pedido no encontrado' });
     res.json(order);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error updating order status';
+    const message = error instanceof Error ? error.message : 'Error al actualizar el pedido';
     res.status(400).json({ message });
   }
 };

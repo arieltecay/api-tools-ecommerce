@@ -64,7 +64,7 @@ const orderSchema = new Schema<IOrder>({
   payment: {
     method: { type: String, enum: ['card', 'bank_transfer'], required: true },
     gateway: String,
-    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'confirmed', 'rejected'], default: 'pending' },
     gatewayTransactionId: String,
     installments: Number,
     confirmedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },

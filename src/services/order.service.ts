@@ -217,17 +217,30 @@ export const getOrderById = async (id: string): Promise<IOrder | null> => {
   return await Order.findById(id);
 };
 
-export const updateOrderStatus = async (id: string, status: string, changedBy: string, note?: string): Promise<IOrder | null> => {
+export const updateOrderStatus = async (id: string, updateData: { status?: string, paymentStatus?: string, paymentMethod?: string, changedBy: string, note?: string }): Promise<IOrder | null> => {
   const order = await Order.findById(id);
   if (!order) return null;
 
-  order.status = status as any;
-  order.statusHistory.push({
-    status,
-    changedBy,
-    changedAt: new Date(),
-    note
-  });
+  if (updateData.status) {
+    order.status = updateData.status as any;
+    order.statusHistory.push({
+      status: updateData.status,
+      changedBy: updateData.changedBy,
+      changedAt: new Date(),
+      note: updateData.note
+    });
+  }
+
+  if (updateData.paymentStatus) {
+    order.payment.status = updateData.paymentStatus as any;
+    if (updateData.paymentStatus === 'confirmed' && !order.payment.paidAt) {
+      order.payment.paidAt = new Date();
+    }
+  }
+
+  if (updateData.paymentMethod) {
+    order.payment.method = updateData.paymentMethod as any;
+  }
 
   return await order.save();
 };

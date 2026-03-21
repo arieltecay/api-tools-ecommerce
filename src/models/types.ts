@@ -165,7 +165,7 @@ export interface IOrder extends Document {
   payment: {
     method: 'card' | 'bank_transfer';
     gateway?: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'confirmed' | 'rejected';
     gatewayTransactionId?: string;
     installments?: number;
     confirmedBy?: Types.ObjectId;

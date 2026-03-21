@@ -22,7 +22,12 @@ export const processPayment = async (req: Request, res: Response) => {
 
     // Update order status based on payment result
     if (result.status === 'approved') {
-      await orderService.updateOrderStatus(orderId, 'confirmed', 'system', 'Payment approved via Decidir');
+      await orderService.updateOrderStatus(orderId, {
+        status: 'confirmed',
+        paymentStatus: 'confirmed',
+        changedBy: 'system',
+        note: 'Pago aprobado vía Decidir'
+      });
     } else {
       // Handle other statuses (rejected, review, etc.)
     }
