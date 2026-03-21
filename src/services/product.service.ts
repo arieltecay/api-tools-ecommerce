@@ -119,8 +119,11 @@ export const addProductImage = async (uuid: string, imageUrl: string, isPrimary:
   const product = await Product.findOne({ uuid });
   if (!product) return null;
 
-  if (isPrimary || product.images.length === 0) {
+  if (isPrimary) {
     product.images.forEach(img => img.isPrimary = false);
+  }
+
+  if (product.images.length === 0) {
     isPrimary = true;
   }
 
@@ -129,6 +132,24 @@ export const addProductImage = async (uuid: string, imageUrl: string, isPrimary:
     isPrimary,
     sortOrder: product.images.length
   });
+
+  return await product.save();
+};
+
+export const deleteProductImage = async (uuid: string, imageUrl: string): Promise<IProduct | null> => {
+  const product = await Product.findOne({ uuid });
+  if (!product) return null;
+
+  const imageIndex = product.images.findIndex(img => img.url === imageUrl);
+  if (imageIndex === -1) return product;
+
+  const wasPrimary = product.images[imageIndex].isPrimary;
+  
+  product.images.splice(imageIndex, 1);
+
+  if (wasPrimary && product.images.length > 0) {
+    product.images[0].isPrimary = true;
+  }
 
   return await product.save();
 };

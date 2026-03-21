@@ -91,23 +91,49 @@ export const remove = async (req: Request, res: Response) => {
 export const uploadProductImage = async (req: Request, res: Response) => {
   try {
     const { uuid } = req.params;
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    if (!req.file) return res.status(400).json({ message: 'No se subió ningún archivo' });
 
     const product = await productService.getProductByUuid(uuid);
-    if (!product) return res.status(404).json({ message: 'Product not found' });
+    if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
 
-    const imageCount = product.images.length;
-    const publicId = `${product.slug}-${imageCount + 1}`;
-
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const uploadResult = await uploadImage(fileBuffer, 'products', publicId);
+    // No usamos publicId manual para evitar colisiones al borrar/re-subir
+    const uploadResult = await uploadImage(req.file.buffer, 'products');
     
-    const updatedProduct = await productService.addProductImage(uuid, uploadResult.secure_url, req.body.isPrimary === 'true');
+    // El frontend ya nos dice si quiere que sea la primaria
+    const isPrimary = req.body.isPrimary === 'true';
+    const updatedProduct = await productService.addProductImage(uuid, uploadResult.secure_url, isPrimary);
     
-    fs.unlinkSync(req.file.path);
     res.json(updatedProduct);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error uploading image';
+    const message = error instanceof Error ? error.message : 'Error al subir la imagen';
+    res.status(500).json({ message });
+  }
+};
+
+export const deleteProductImage = async (req: Request, res: Response) => {
+  try {
+    const { uuid } = req.params;
+    const { public_id: imageUrl } = req.params;
+
+    const updatedProduct = await productService.deleteProductImage(uuid, imageUrl);
+    
+    if (imageUrl.includes('cloudinary.com')) {
+      try {
+        const parts = imageUrl.split('/');
+        const fileName = parts[parts.length - 1].split('.')[0];
+        const folder = parts[parts.length - 2];
+        const subFolder = parts[parts.length - 3];
+        const cloudinaryId = `tools-store/${subFolder}/${fileName}`;
+        const { deleteImage } = await import('../services/upload.service');
+        await deleteImage(cloudinaryId);
+      } catch (err) {
+        console.error('Error al borrar imagen de Cloudinary:', err);
+      }
+    }
+
+    res.json(updatedProduct);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Error al eliminar la imagen';
     res.status(500).json({ message });
   }
 };

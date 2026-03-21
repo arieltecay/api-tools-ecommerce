@@ -15,5 +15,6 @@ router.patch('/:uuid', authenticateAdmin, productController.update);
 router.delete('/:uuid', authenticateAdmin, productController.remove);
 
 router.post('/:uuid/images', authenticateAdmin, upload.single('image'), productController.uploadProductImage);
+router.delete('/:uuid/images/:public_id', authenticateAdmin, productController.deleteProductImage);
 
 export default router;
