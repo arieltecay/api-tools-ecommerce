@@ -64,14 +64,41 @@ export const createOrder = async (orderData: CreateOrderDTO): Promise<IOrder> =>
     
     const initialStatus = orderData.payment.method === 'bank_transfer' ? 'pending_payment' : 'confirmed';
 
+    // RECALCULATE PRICES FROM DATABASE (Safety First)
+    let subtotal = 0;
+    const validatedItems = [];
+
+    for (const item of orderData.items) {
+      const dbProduct = await Product.findById(item.product._id).session(session);
+      if (!dbProduct) throw new Error(`Producto ${item.product.name} no encontrado.`);
+      
+      const unitPrice = dbProduct.price;
+      const itemSubtotal = unitPrice * item.quantity;
+      subtotal += itemSubtotal;
+
+      validatedItems.push({
+        ...item,
+        unitPrice,
+        subtotal: itemSubtotal
+      });
+    }
+
+    const total = subtotal + (orderData.pricing.shippingCost || 0) - (orderData.pricing.discountAmount || 0);
+
     const order = new Order({
       ...orderData,
+      items: validatedItems,
+      pricing: {
+        ...orderData.pricing,
+        subtotal,
+        total
+      },
       orderNumber,
       status: initialStatus,
       statusHistory: [{
         status: initialStatus,
         changedBy: 'system',
-        note: 'Order created'
+        note: 'Pedido creado y precios validados.'
       }]
     });
 
