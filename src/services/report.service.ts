@@ -1,39 +1,33 @@
 import Order from '../models/order.model';
 import Product from '../models/product.model';
-import Customer from '../models/customer.model';
 import moment from 'moment';
-
-export interface SalesByDay {
-  date: string;
-  total: number;
-  count: number;
-}
-
-export interface TopCategory {
-  name: string;
-  total: number;
-  quantity: number;
-}
 
 export interface DashboardStats {
   revenue: number;
   orders: number;
   avgTicket: number;
-  newCustomers: number;
-  lowStockAlerts: number;
-  recentOrders: any[]; // Order documents are complex, could use IOrder[] but might need lean objects
-  salesByDay: SalesByDay[];
-  topCategories: TopCategory[];
+  revenueGrowth: number;
+  ordersGrowth: number;
+  avgTicketGrowth: number;
+  recentOrders: any[];
+  topProducts: any[];
+  topCategories: any[];
+  topBrands: any[];
+  paymentMethods: any[];
+  orderStatusDistribution: any[];
 }
 
-export const getDashboardStats = async (period: string = '30days'): Promise<DashboardStats> => {
-  let startDate: moment.Moment;
-  if (period === 'today') startDate = moment().startOf('day');
-  else if (period === '7days') startDate = moment().subtract(7, 'days').startOf('day');
-  else startDate = moment().subtract(30, 'days').startOf('day');
+export const getDashboardStats = async (startDateStr?: string, endDateStr?: string): Promise<DashboardStats> => {
+  const endDate = endDateStr ? moment(endDateStr).endOf('day') : moment().endOf('day');
+  const startDate = startDateStr ? moment(startDateStr).startOf('day') : moment().subtract(30, 'days').startOf('day');
 
-  const salesStats = await Order.aggregate([
-    { $match: { createdAt: { $gte: startDate.toDate() }, status: { $ne: 'cancelled' } } },
+  const diffDays = endDate.diff(startDate, 'days');
+  const prevStartDate = moment(startDate).subtract(diffDays + 1, 'days').startOf('day');
+  const prevEndDate = moment(startDate).subtract(1, 'days').endOf('day');
+
+  // 1. KPIs
+  const currentKpis = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() }, status: { $ne: 'cancelled' } } },
     {
       $group: {
         _id: null,
@@ -44,57 +38,93 @@ export const getDashboardStats = async (period: string = '30days'): Promise<Dash
     }
   ]);
 
-  const newCustomers = await Customer.countDocuments({ createdAt: { $gte: startDate.toDate() } });
-  const lowStockProducts = await Product.countDocuments({ stock: { $lte: 5 }, status: 'active' });
-  const recentOrders = await Order.find()
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .lean();
-
-  // 1. Sales by Day
-  const salesByDayResult = await Order.aggregate([
-    { $match: { createdAt: { $gte: startDate.toDate() }, status: { $ne: 'cancelled' } } },
+  const prevKpis = await Order.aggregate([
+    { $match: { createdAt: { $gte: prevStartDate.toDate(), $lte: prevEndDate.toDate() }, status: { $ne: 'cancelled' } } },
     {
       $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        total: { $sum: '$pricing.total' },
-        count: { $sum: 1 }
+        _id: null,
+        totalRevenue: { $sum: '$pricing.total' },
+        orderCount: { $sum: 1 },
+        avgTicket: { $avg: '$pricing.total' }
       }
-    },
-    { $sort: { _id: 1 } }
+    }
   ]);
 
-  // 2. Top Categories
-  const topCategoriesResult = await Order.aggregate([
-    { $match: { createdAt: { $gte: startDate.toDate() }, status: { $ne: 'cancelled' } } },
+  const calculateGrowth = (current: number, previous: number) => {
+    if (!previous || previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const currentRevenue = currentKpis[0]?.totalRevenue || 0;
+  const currentOrders = currentKpis[0]?.orderCount || 0;
+  const currentAvgTicket = currentKpis[0]?.avgTicket || 0;
+
+  // 2. Top Categorías Simplificado (El nombre ya está en el producto)
+  const topCategories = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() }, status: { $ne: 'cancelled' } } },
     { $unwind: '$items' },
     {
+      $lookup: {
+        from: 'products',
+        localField: 'items.product._id',
+        foreignField: '_id',
+        as: 'productData'
+      }
+    },
+    { $unwind: '$productData' },
+    {
       $group: {
-        _id: '$items.product.category.name',
+        _id: '$productData.category.name',
         total: { $sum: '$items.subtotal' },
         quantity: { $sum: '$items.quantity' }
       }
     },
     { $sort: { total: -1 } },
-    { $limit: 5 }
+    { $limit: 6 }
   ]);
 
+  // 3. Top Productos
+  const topProducts = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() }, status: { $ne: 'cancelled' } } },
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: '$items.product.name',
+        total: { $sum: '$items.subtotal' },
+        quantity: { $sum: '$items.quantity' }
+      }
+    },
+    { $sort: { quantity: -1 } },
+    { $limit: 8 }
+  ]);
+
+  const statusDistribution = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() } } },
+    { $group: { _id: '$status', count: { $sum: 1 } } }
+  ]);
+
+  const paymentMethods = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() }, status: { $ne: 'cancelled' } } },
+    { $group: { _id: '$payment.method', count: { $sum: 1 }, total: { $sum: '$pricing.total' } } }
+  ]);
+
+  const recentOrders = await Order.find({ createdAt: { $gte: startDate.toDate(), $lte: endDate.toDate() } })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+
   return {
-    revenue: salesStats[0]?.totalRevenue || 0,
-    orders: salesStats[0]?.orderCount || 0,
-    avgTicket: salesStats[0]?.avgTicket || 0,
-    newCustomers,
-    lowStockAlerts: lowStockProducts,
+    revenue: currentRevenue,
+    orders: currentOrders,
+    avgTicket: currentAvgTicket,
+    revenueGrowth: calculateGrowth(currentRevenue, prevKpis[0]?.totalRevenue || 0),
+    ordersGrowth: calculateGrowth(currentOrders, prevKpis[0]?.orderCount || 0),
+    avgTicketGrowth: calculateGrowth(currentAvgTicket, prevKpis[0]?.avgTicket || 0),
     recentOrders,
-    salesByDay: salesByDayResult.map(day => ({ 
-      date: String(day._id), 
-      total: Number(day.total), 
-      count: Number(day.count) 
-    })),
-    topCategories: topCategoriesResult.map(cat => ({ 
-      name: String(cat._id), 
-      total: Number(cat.total), 
-      quantity: Number(cat.quantity) 
-    }))
+    topProducts: topProducts.map(p => ({ name: p._id, total: p.total, quantity: p.quantity })),
+    topCategories: topCategories.map(c => ({ name: c._id, total: c.total, quantity: c.quantity })),
+    topBrands: [], 
+    paymentMethods: paymentMethods.map(p => ({ method: p._id, count: p.count, total: p.total })),
+    orderStatusDistribution: statusDistribution.map(s => ({ status: s._id, count: s.count }))
   };
 };
