@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as orderController from '../controllers/order.controller';
+import * as orderController from '../controllers/order/order.controller';
 import { authenticateAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -14,7 +14,7 @@ router.post('/', orderController.create);
  * RUTAS PRIVADAS (Para el Admin)
  */
 // Solo los administradores pueden listar, ver detalles o cambiar estados
-router.get('/', authenticateAdmin, orderController.getAll);
+router.get('/', authenticateAdmin, orderController.getAllOrders);
 router.get('/:id', authenticateAdmin, orderController.getById);
 router.patch('/:id/status', authenticateAdmin, orderController.updateStatus);
 

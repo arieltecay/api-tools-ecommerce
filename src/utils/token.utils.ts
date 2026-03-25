@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { IAdminUser } from '../models/types';
+import { IAdminUser } from '../models/auth/types';
 
 export const generateTokens = (user: IAdminUser) => {
   const accessToken = jwt.sign(

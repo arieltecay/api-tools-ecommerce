@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as productController from '../controllers/product.controller';
+import * as productController from '../controllers/product/product.controller';
 import { upload } from '../middleware/upload.middleware';
 import { authenticateAdmin } from '../middleware/auth.middleware';
 

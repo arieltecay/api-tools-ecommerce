@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as stockMovementController from '../controllers/stock-movement.controller';
+import * as stockMovementController from '../controllers/stock-movement/stock-movement.controller';
 import { authenticateAdmin } from '../middleware/auth.middleware';
 
 const router = Router();

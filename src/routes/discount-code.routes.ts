@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as discountCodeController from '../controllers/discount-code.controller';
+import * as discountCodeController from '../controllers/discount-code/discount-code.controller';
 import { authenticateAdmin } from '../middleware/auth.middleware';
 
 const router = Router();

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as importController from '../controllers/import.controller';
+import * as importController from '../controllers/import/import.controller';
 import { uploadExcel } from '../middleware/upload.middleware';
 import { authenticateAdmin } from '../middleware/auth.middleware';
 
