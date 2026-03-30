@@ -1,6 +1,7 @@
 import Product from '../../models/product/product.model';
 import { IProduct, IPriceHistory } from '../../models/product/types';
 import { FilterQuery } from 'mongoose';
+import mongoose from 'mongoose';
 import { ProductFilters, PaginationOptions } from './types';
 
 export const createProduct = async (data: Partial<IProduct>): Promise<IProduct> => {
@@ -65,24 +66,70 @@ export const getProductBySlug = async (slug: string): Promise<IProduct | null> =
 };
 
 export const updateProduct = async (id: string, data: Partial<IProduct>, changedBy?: string): Promise<IProduct | null> => {
-  const product = await Product.findById(id);
-  if (!product) return null;
+  try {
+    // Use UUID to find product (routes use :uuid)
+    const product = await Product.findOne({ uuid: id });
+    if (!product) return null;
 
-  // Track price history if price changes
-  if (data.price !== undefined && data.price !== product.price) {
-    const historyItem = {
-      previousPrice: product.price,
-      newPrice: data.price,
-      changedBy: changedBy ? (changedBy as any) : undefined,
-      changedAt: new Date()
-    };
-    product.priceHistory.push(historyItem as IPriceHistory);
+    // Track price history if price changes
+    if (data.price !== undefined && data.price !== product.price) {
+      const historyItem = {
+        previousPrice: product.price,
+        newPrice: data.price,
+        changedBy: changedBy ? (changedBy as any) : undefined,
+        changedAt: new Date()
+      };
+      product.priceHistory.push(historyItem as IPriceHistory);
+    }
+
+    // Whitelist of updatable fields
+    const allowedSimpleFields = [
+      'sku', 'name', 'slug', 'shortDescription', 'longDescription',
+      'costPrice', 'price', 'stock', 'minStock', 'weight', 'status', 'isFeatured', 'tags'
+    ];
+
+    // Update simple fields
+    for (const field of allowedSimpleFields) {
+      if (field in data) {
+        (product as any)[field] = (data as any)[field];
+      }
+    }
+
+    // Handle dimensions separately (nested object)
+    if (data.dimensions) {
+      product.dimensions = data.dimensions;
+    }
+
+    // Only update category if it has all required fields AND _id is a valid ObjectId
+    if (data.category) {
+      const categoryData = data.category as any;
+      if (categoryData._id && categoryData.uuid && categoryData.name && categoryData.slug) {
+        // Validate ObjectId using Mongoose
+        if (mongoose.Types.ObjectId.isValid(categoryData._id)) {
+          product.category = categoryData;
+        }
+      }
+    }
+
+    // Only update brand if it has all required fields AND _id is a valid ObjectId
+    if (data.brand) {
+      const brandData = data.brand as any;
+      if (brandData._id && brandData.name) {
+        // Validate ObjectId using Mongoose
+        if (mongoose.Types.ObjectId.isValid(brandData._id)) {
+          product.brand = brandData;
+        }
+      }
+    }
+
+    return await product.save();
+  } catch (error: any) {
+    console.error('updateProduct error:', error.message);
+    throw error;
   }
-
-  Object.assign(product, data);
-  return await product.save();
 };
 
 export const deleteProduct = async (id: string): Promise<IProduct | null> => {
-  return await Product.findByIdAndDelete(id);
+  // Use UUID to find and delete (routes use :uuid)
+  return await Product.findOneAndDelete({ uuid: id });
 };

@@ -75,12 +75,27 @@ export const getBySlug = async (req: Request, res: Response) => {
 export const update = async (req: RequestWithUser, res: Response) => {
   try {
     const changedBy = req.user?._id?.toString();
-    // Some routes might use :id and others :uuid. Based on routes it's :uuid
-    const id = req.params.id || req.params.uuid;
-    const product = await productService.updateProduct(id, req.body, changedBy);
+    const uuid = req.params.uuid;
+    
+    // Filter and prepare update data
+    const allowedFields = [
+      'sku', 'name', 'slug', 'shortDescription', 'longDescription',
+      'costPrice', 'price', 'stock', 'minStock', 'weight', 'dimensions',
+      'status', 'isFeatured', 'tags', 'category', 'brand'
+    ];
+    
+    const updateData: any = {};
+    for (const field of allowedFields) {
+      if (field in req.body) {
+        updateData[field] = req.body[field];
+      }
+    }
+    
+    const product = await productService.updateProduct(uuid, updateData, changedBy);
     if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
     res.json(product);
   } catch (error) {
+    console.error('Error updating product:', error);
     const message = error instanceof Error ? error.message : 'Error al actualizar el producto';
     res.status(400).json({ message });
   }
@@ -88,8 +103,8 @@ export const update = async (req: RequestWithUser, res: Response) => {
 
 export const remove = async (req: Request, res: Response) => {
   try {
-    const id = req.params.id || req.params.uuid;
-    const product = await productService.deleteProduct(id);
+    const uuid = req.params.uuid;
+    const product = await productService.deleteProduct(uuid);
     if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
     res.json({ message: 'Producto eliminado correctamente' });
   } catch (error) {

@@ -23,6 +23,7 @@ import reportRoutes from './routes/report.routes';
 import paymentRoutes from './routes/payment.routes';
 import importRoutes from './routes/import.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
+import financialRoutes from './routes/financial/financialRoutes';
 
 const app: Express = express();
 
@@ -81,6 +82,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/import', importRoutes);
 app.use('/api/v1/whatsapp', whatsappRoutes);
+app.use('/api/v1/financial', financialRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
