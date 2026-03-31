@@ -24,6 +24,7 @@ import paymentRoutes from './routes/payment.routes';
 import importRoutes from './routes/import.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import financialRoutes from './routes/financial/financialRoutes';
+import heroSlideRoutes from './routes/hero-slide.routes';
 
 const app: Express = express();
 
@@ -83,6 +84,7 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/import', importRoutes);
 app.use('/api/v1/whatsapp', whatsappRoutes);
 app.use('/api/v1/financial', financialRoutes);
+app.use('/api/v1/hero-slides', heroSlideRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
