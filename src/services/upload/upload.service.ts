@@ -2,7 +2,12 @@ import cloudinary from '../../config/cloudinary';
 import { UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
 import { UploadStreamOptions } from './types';
 
-export const uploadImage = async (fileBuffer: Buffer, folder: string, publicId?: string): Promise<UploadApiResponse> => {
+export const uploadImage = async (
+  fileBuffer: Buffer, 
+  folder: string, 
+  publicId?: string,
+  removeBackground: boolean = false
+): Promise<UploadApiResponse> => {
   return new Promise((resolve, reject) => {
     const options: UploadStreamOptions = {
       folder: `tools-store/${folder}`,
@@ -11,6 +16,10 @@ export const uploadImage = async (fileBuffer: Buffer, folder: string, publicId?:
         { quality: 'auto', fetch_format: 'auto' }
       ]
     };
+
+    if (removeBackground) {
+      options.background_removal = 'cloudinary_ai';
+    }
 
     if (publicId) {
       options.public_id = publicId;

@@ -123,7 +123,15 @@ export const uploadProductImage = async (req: Request, res: Response) => {
     const product = await productService.getProductByUuid(uuid);
     if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
 
-    const result = await uploadService.uploadImage(req.file.buffer, 'products');
+    // Check if background removal is requested (defaults to false)
+    const removeBackground = req.query.removeBackground === 'true';
+
+    const result = await uploadService.uploadImage(
+      req.file.buffer, 
+      'products', 
+      undefined, 
+      removeBackground
+    );
     
     product.images.push({
       url: result.secure_url,
